@@ -1,0 +1,215 @@
+// Prisma Schema for VOCH Platform
+// Database: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Model
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  username      String    @unique
+  password      String?   // Nullable for OAuth users
+  firstName     String?
+  lastName      String?
+  avatar        String?
+  bio           String?
+  phone         String?
+  location      String?
+  verified      Boolean   @default(false)
+  role          UserRole  @default(USER)
+  googleId      String?   @unique
+  facebookId    String?   @unique
+  refreshToken  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  posts         Post[]
+  comments      Comment[]
+  polls         Poll[]
+  pollVotes     PollVote[]
+  campaigns     Campaign[]
+  reactions     Reaction[]
+  followers     Follow[]  @relation("Following")
+  following     Follow[]  @relation("Followers")
+
+  @@index([email])
+  @@index([username])
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+// Post Model
+model Post {
+  id          String     @id @default(uuid())
+  content     String
+  imageUrl    String?
+  authorId    String
+  author      User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  visibility  Visibility @default(PUBLIC)
+  tags        String[]
+  published   Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  comments    Comment[]
+  reactions   Reaction[]
+
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+  FOLLOWERS
+}
+
+// Comment Model
+model Comment {
+  id          String   @id @default(uuid())
+  content     String
+  postId      String
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentId    String?  // For nested comments
+  parent      Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     Comment[] @relation("CommentReplies")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([parentId])
+}
+
+// Reaction Model (Likes, Love, etc.)
+model Reaction {
+  id        String       @id @default(uuid())
+  type      ReactionType
+  postId    String
+  post      Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+}
+
+enum ReactionType {
+  LIKE
+  LOVE
+  SUPPORT
+  INSIGHTFUL
+}
+
+// Poll Model
+model Poll {
+  id          String       @id @default(uuid())
+  question    String
+  description String?
+  authorId    String
+  author      User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  options     PollOption[]
+  votes       PollVote[]
+  multiChoice Boolean      @default(false)
+  expiresAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model PollOption {
+  id        String     @id @default(uuid())
+  text      String
+  pollId    String
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes     PollVote[]
+  createdAt DateTime   @default(now())
+
+  @@index([pollId])
+}
+
+model PollVote {
+  id        String     @id @default(uuid())
+  pollId    String
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  optionId  String
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@unique([pollId, optionId, userId])
+  @@index([pollId])
+  @@index([userId])
+}
+
+// Campaign Model
+model Campaign {
+  id          String         @id @default(uuid())
+  title       String
+  description String
+  imageUrl    String?
+  goal        String
+  category    CampaignCategory
+  status      CampaignStatus @default(ACTIVE)
+  authorId    String
+  author      User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  supporters  Int            @default(0)
+  location    String?
+  tags        String[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  expiresAt   DateTime?
+
+  @@index([authorId])
+  @@index([status])
+  @@index([category])
+}
+
+enum CampaignCategory {
+  EDUCATION
+  HEALTH
+  ENVIRONMENT
+  SOCIAL_JUSTICE
+  INFRASTRUCTURE
+  GOVERNANCE
+  OTHER
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+// Follow Model (Social connections)
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  follower    User     @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String
+  following   User     @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
